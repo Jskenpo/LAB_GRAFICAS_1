@@ -143,46 +143,17 @@ class Renderer(object):
 
                 limit += 1
 
-    def CrearFiguraLineas(self, Array):
+    def CrearFiguraLineas(self,Array):
         # dibujar las figuras con las tuplas dentro de la lista
         for i in range(len(Array)):
-            self.glLine(V2(Array[i].x, Array[i].y), V2(Array[i - 1].x, Array[i - 1].y), color(1, 1, 1))
+            self.glLine(V2(Array[i][0], Array[i][1]), V2(Array[i - 1][0], Array[i - 1][1]), color(1, 1, 1))
 
             ## si llega al limite de la lista, se conecta el ultimo punto con el primero
             if i == len(Array) - 1:
-                self.glLine(V2(Array[i].x, Array[i].y), V2(Array[0].x, Array[0].y), color(1, 1, 1))
+                self.glLine(V2(Array[i][0], Array[i][1]), V2(Array[0][0], Array[0][1]), color(1, 1, 1))
 
-        # Rellenar el polígono utilizando el algoritmo de escaneo de líneas
-        ymin = min(Array, key=lambda p: p.y).y
-        ymax = max(Array, key=lambda p: p.y).y
+    ## Haz una funcion que obtenga los vertices de un modelo, los dibuje y los rellene de un color solido
 
-        # Crear una lista de bordes para cada línea horizontal en el polígono
-        bordes = [[] for _ in range(ymax - ymin + 1)]
-        for i in range(len(Array)):
-            x0, y0 = Array[i].x, Array[i].y
-            x1, y1 = Array[i - 1].x, Array[i - 1].y
-
-            # Asegurarse de que y0 sea menor o igual que y1
-            if y0 > y1:
-                x0, y0, x1, y1 = x1, y1, x0, y0
-
-            # Encontrar la pendiente inversa para la línea actual
-            m_inv = (x1 - x0) / (y1 - y0) if y1 != y0 else 0
-
-            # Agregar punto de intersección solo si no es una línea horizontal
-            if y0 != y1:
-                for y in range(y0, y1 + 1):
-                    x = x0 + int(m_inv * (y - y0))
-                    bordes[y - ymin].append(x)
-
-        # Rellenar los píxeles entre los puntos de intersección
-        for y, puntos in enumerate(bordes):
-            if len(puntos) >= 2:
-                for i in range(0, len(puntos), 2):
-                    x_inicio = min(puntos[i], puntos[i + 1])
-                    x_fin = max(puntos[i], puntos[i + 1])
-                    for x in range(x_inicio, x_fin + 1):
-                        self.glPoint(V2(x, y + ymin), color(1, 1, 1))
 
 
 

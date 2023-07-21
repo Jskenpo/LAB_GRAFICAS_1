@@ -25,18 +25,12 @@ figura4 = [(413, 177), (448, 159), (502, 88), (553, 53), (535, 36), (676, 37), (
 
 figura5 = [(682, 175), (708, 120), (735, 148), (739, 170)]
 
-puntos_figura1= [V2(x, y) for x, y in figura1]
-puntos_figura2= [V2(x, y) for x, y in figura2]
-puntos_figura3= [V2(x, y) for x, y in figura3]
-puntos_figura4= [V2(x, y) for x, y in figura4]
-puntos_figura5= [V2(x, y) for x, y in figura5]
 
-rend.CrearFiguraLineas(puntos_figura1)
-rend.CrearFiguraLineas(puntos_figura2)
-rend.CrearFiguraLineas(puntos_figura3)
-rend.CrearFiguraLineas(puntos_figura4)
-rend.CrearFiguraLineas(puntos_figura5)
-
+rend.CrearFiguraLineas(figura1)
+rend.CrearFiguraLineas(figura2)
+rend.CrearFiguraLineas(figura3)
+rend.CrearFiguraLineas(figura4)
+rend.CrearFiguraLineas(figura5)
 
 rend.glFinish("output.bmp")
 
