@@ -1,9 +1,9 @@
 from gl import Renderer, V2,V3, color
 import shaders
 
-width = 2000
+width = 1000
 
-height = 1000
+height = 700
 
 rend = Renderer(width,height)
 
@@ -26,11 +26,12 @@ figura4 = [(413, 177), (448, 159), (502, 88), (553, 53), (535, 36), (676, 37), (
 figura5 = [(682, 175), (708, 120), (735, 148), (739, 170)]
 
 
-rend.CrearFiguraLineas(figura1)
-rend.CrearFiguraLineas(figura2)
-rend.CrearFiguraLineas(figura3)
-rend.CrearFiguraLineas(figura4)
-rend.CrearFiguraLineas(figura5)
+rend.CrearFiguraRelleno(figura1, color(1, 0, 0))   # Colorea la figura 1 de rojo
+rend.CrearFiguraRelleno(figura2, color(0, 1, 0))   # Colorea la figura 2 de verde
+rend.CrearFiguraRelleno(figura3, color(0, 0, 1))   # Colorea la figura 3 de azul
+rend.CrearFiguraRelleno(figura4, color(1, 1, 0))   # Colorea la figura 4 de amarillo
+rend.CrearFiguraRelleno(figura5, color(1, 0, 1))   # Colorea la figura 5 de magenta
+
 
 rend.glFinish("output.bmp")
 

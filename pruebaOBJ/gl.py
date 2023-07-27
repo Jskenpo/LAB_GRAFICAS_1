@@ -143,26 +143,49 @@ class Renderer(object):
 
                 limit += 1
 
-    def CrearFiguraLineas(self,Array):
-        # dibujar las figuras con las tuplas dentro de la lista
-        for i in range(len(Array)):
-            self.glLine(V2(Array[i][0], Array[i][1]), V2(Array[i - 1][0], Array[i - 1][1]), color(1, 1, 1))
+    def CrearFiguraRelleno(self, Array, clr=None):
+        # Dibujar las figuras con las tuplas dentro de la lista
+        num_vertices = len(Array)
+        y_min = min(Array, key=lambda v: v[1])[1]
+        y_max = max(Array, key=lambda v: v[1])[1]
 
-            ## si llega al limite de la lista, se conecta el ultimo punto con el primero
-            if i == len(Array) - 1:
-                self.glLine(V2(Array[i][0], Array[i][1]), V2(Array[0][0], Array[0][1]), color(1, 1, 1))
+        # Escaneo de líneas (scanline fill)
+        for y in range(y_min, y_max + 1):
+            intersections = []
+            for i in range(num_vertices):
+                v0 = V2(*Array[i])
+                v1 = V2(*Array[(i + 1) % num_vertices])
 
-    ## Haz una funcion que obtenga los vertices de un modelo, los dibuje y los rellene de un color solido
+                # Verificar si la línea cruza el píxel horizontal actual
+                if v0.y <= y < v1.y or v1.y <= y < v0.y:
+                    x_intersection = int(v0.x + (y - v0.y) * (v1.x - v0.x) / (v1.y - v0.y))
+                    intersections.append(x_intersection)
 
+            # Ordenar las intersecciones para rellenar el tramo entre ellas
+            intersections.sort()
+            for i in range(0, len(intersections), 2):
+                x_start = intersections[i]
+                x_end = intersections[i + 1]
+                for x in range(x_start, x_end + 1):
+                    self.glPoint(x, y, clr or self.currColor)
 
+    def glFillTriangle(self, v0, v1, v2, clr=None):
+        # Se asume que los vértices están en sentido horario.
+        minX = min(v0[0], v1[0], v2[0])
+        minY = min(v0[1], v1[1], v2[1])
+        maxX = max(v0[0], v1[0], v2[0])
+        maxY = max(v0[1], v1[1], v2[1])
 
+        for x in range(minX, maxX + 1):
+            for y in range(minY, maxY + 1):
+                w0 = ((v1[1] - v2[1]) * (x - v2[0]) + (v2[0] - v1[0]) * (y - v2[1])) / \
+                     ((v1[1] - v2[1]) * (v0[0] - v2[0]) + (v2[0] - v1[0]) * (v0[1] - v2[1]))
+                w1 = ((v2[1] - v0[1]) * (x - v2[0]) + (v0[0] - v2[0]) * (y - v2[1])) / \
+                     ((v1[1] - v2[1]) * (v0[0] - v2[0]) + (v2[0] - v1[0]) * (v0[1] - v2[1]))
+                w2 = 1 - w0 - w1
 
-
-
-
-
-    def glLoadModel(self, filename, translate=(0, 0, 0), rotate=(0, 0, 0), scale=(1, 1, 1)):
-        self.objects.append(Model(filename, translate, rotate, scale))
+                if w0 >= 0 and w1 >= 0 and w2 >= 0:
+                    self.glPoint(x, y, clr or self.currColor)
 
     def glRender(self):
 
