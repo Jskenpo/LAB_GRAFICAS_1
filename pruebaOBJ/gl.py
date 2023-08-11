@@ -1,8 +1,9 @@
 import struct
 from collections import namedtuple
-import numpy as np
 from obj import Obj
-from Mate import MultiplicarMatrices
+import Mate as ml
+import math
+from texture import Texture
 
 V2 = namedtuple('V2', ['x', 'y'])
 V3 = namedtuple('V3', ['x', 'y', 'z'])
@@ -46,6 +47,9 @@ class Model(object):
         self.rotate = rotate
         self.scale = scale
 
+    def LoadTexture(self, filename):
+        self.texture = Texture(filename)
+
 
 class Renderer(object):
     def __init__(self, width, height):
@@ -63,6 +67,12 @@ class Renderer(object):
         self.fragmentShader = None
         self.objects = []
 
+        self.activeTexture = None
+
+        self.glViewport(0, 0, self.width, self.height)
+        self.glCameraMatrix()
+        self.glProjectionMatrix()
+
     def glClearColor(self, r, g, b):
         self.clearColor = color(r, g, b)
 
@@ -72,6 +82,8 @@ class Renderer(object):
     def glClear(self):
         self.pixels = [[self.clearColor for y in range(self.height)] for x in range(self.width)]
 
+        self.zbuffer = [[-float('inf') for y in range(self.height)] for x in range(self.width)]
+
     def glPoint(self, x, y, clr=None):
         if 0 <= x < self.width and 0 <= y < self.height:
             self.pixels[x][y] = clr or self.currColor
@@ -80,6 +92,44 @@ class Renderer(object):
         self.glLine(v0, v1, clr or self.currColor)
         self.glLine(v1, v2, clr or self.currColor)
         self.glLine(v2, v0, clr or self.currColor)
+
+    def glTriangle_bc(self, A, B, C, vtA, vtB, vtC):
+
+        minX = round(min(A[0], B[0], C[0]))
+        maxX = round(max(A[0], B[0], C[0]))
+        minY = round(min(A[1], B[1], C[1]))
+        maxY = round(max(A[1], B[1], C[1]))
+
+        colorA = (1, 0, 0)
+        colorB = (0, 1, 0)
+        colorC = (0, 0, 1)
+
+        for x in range(minX, maxX + 1):
+            for y in range(minY, maxY + 1):
+
+                if (0 <= x < self.width) and (0 <= y < self.height):
+
+                    P = (x, y)
+                    u, v, w = ml.barycentricCoordinates(A, B, C, P)
+
+                    if 0 <= u <= 1 and 0 <= v <= 1 and 0 <= w <= 1:
+
+                        z = u * A[2] + v * B[2] + w * C[2]
+
+                        if z < self.zbuffer[x][y]:
+
+                            self.zbuffer[x][y] = z
+
+                            uvs = (u * vtA[0] + v * vtB[0] + w * vtC[0],
+                                   u * vtA[1] + v * vtB[1] + w * vtC[1])
+
+                            if self.fragmentShader != None:
+                                colorP = self.fragmentShader(texCoords=uvs,
+                                                             texture=self.activeTexture)
+                                if colorP != None:
+                                    self.glPoint(x, y, color(colorP[0], colorP[1], colorP[2]))
+                            else:
+                                self.glPoint(x, y, colorP)
 
     def glLine(self, v0, v1, clr=None):
         # Bresenham line algorith
@@ -188,53 +238,78 @@ class Renderer(object):
                     self.glPoint(x, y, clr or self.currColor)
 
     def glRender(self):
-
         transformedVerts = []
+        texCoords = []
+
         for model in self.objects:
-            modelMatrix = self.glModelMatrix(model.translate, model.scale, model.rotate)
 
-        for face in model.faces:
-            vertCount = len(face)
-            v0 = model.vertices[face[0][0] - 1]
-            v1 = model.vertices[face[1][0] - 1]
-            v2 = model.vertices[face[2][0] - 1]
+            self.activeTexture = model.texture
+            mMatrix = self.glModelMatrix(model.translate, model.rotate, model.scale)
 
-            if vertCount == 4:
-                v3 = model.vertices[face[3][0] - 1]
-
-            if self.vertexShader:
-                v0 = self.vertexShader(v0, modelMatrix=modelMatrix)
-                v1 = self.vertexShader(v1, modelMatrix=modelMatrix)
-                v2 = self.vertexShader(v2, modelMatrix=modelMatrix)
+            for face in model.faces:
+                vertCount = len(face)
+                v0 = model.vertices[face[0][0] - 1]
+                v1 = model.vertices[face[1][0] - 1]
+                v2 = model.vertices[face[2][0] - 1]
                 if vertCount == 4:
-                    v3 = self.vertexShader(v3, modelMatrix=modelMatrix)
-            transformedVerts.append(v0)
-            transformedVerts.append(v1)
-            transformedVerts.append(v2)
-            if vertCount == 4:
+                    v3 = model.vertices[face[3][0] - 1]
+
+                if self.vertexShader:
+                    v0 = self.vertexShader(v0,
+                                           modelMatrix=mMatrix,
+                                           viewMatrix=self.viewMatrix,
+                                           projectionMatrix=self.projectionMatrix,
+                                           vpMatrix=self.vpMatrix)
+                    v1 = self.vertexShader(v1,
+                                           modelMatrix=mMatrix,
+                                           viewMatrix=self.viewMatrix,
+                                           projectionMatrix=self.projectionMatrix,
+                                           vpMatrix=self.vpMatrix)
+                    v2 = self.vertexShader(v2,
+                                           modelMatrix=mMatrix,
+                                           viewMatrix=self.viewMatrix,
+                                           projectionMatrix=self.projectionMatrix,
+                                           vpMatrix=self.vpMatrix)
+                    if vertCount == 4:
+                        v3 = self.vertexShader(v3,
+                                               modelMatrix=mMatrix,
+                                               viewMatrix=self.viewMatrix,
+                                               projectionMatrix=self.projectionMatrix,
+                                               vpMatrix=self.vpMatrix)
+
                 transformedVerts.append(v0)
+                transformedVerts.append(v1)
                 transformedVerts.append(v2)
-                transformedVerts.append(v3)
+                if vertCount == 4:
+                    transformedVerts.append(v0)
+                    transformedVerts.append(v2)
+                    transformedVerts.append(v3)
 
+                vt0 = model.texcoords[face[0][1] - 1]
+                vt1 = model.texcoords[face[1][1] - 1]
+                vt2 = model.texcoords[face[2][1] - 1]
+                if vertCount == 4:
+                    vt3 = model.texcoords[face[3][1] - 1]
 
-        primitives = self.glPrimitiveAssembly(transformedVerts)
+                texCoords.append(vt0)
+                texCoords.append(vt1)
+                texCoords.append(vt2)
+                if vertCount == 4:
+                    texCoords.append(vt0)
+                    texCoords.append(vt2)
+                    texCoords.append(vt3)
 
-        if self.fragmentShader:
-            primsColor = self.fragmentShader()
+        primitives = self.glPrimitiveAssembly(transformedVerts, texCoords)
 
-            primColor = color(primsColor[0], primsColor[1], primsColor[2])
-        else:
-            primColor = self.currColor
-
-        for primitive in primitives:
+        for prim in primitives:
             if self.primitiveType == TRIANGLES:
-                self.glTriangle(primitive[0], primitive[1], primitive[2], primColor)
-
+                self.glTriangle_bc(prim[0], prim[1], prim[2],
+                                   prim[3], prim[4], prim[5])
     def glAddVertices(self, vertices):
         for vert in vertices:
             self.vertexBuffer.append(vert)
 
-    def glPrimitiveAssembly(self, tVerts):
+    def glPrimitiveAssembly(self, tVerts, tTexCoords):
 
         primitives = []
 
@@ -244,43 +319,40 @@ class Renderer(object):
                 triangle.append(tVerts[i])
                 triangle.append(tVerts[i + 1])
                 triangle.append(tVerts[i + 2])
+
+                triangle.append(tTexCoords[i])
+                triangle.append(tTexCoords[i + 1])
+                triangle.append(tTexCoords[i + 2])
+
+
                 primitives.append(triangle)
+
 
         return primitives
 
-    def glModelMatrix(self, translate=(0, 0, 0), scale=(1, 1, 1), rotate=(0, 0, 0)):
-        translation = [[1, 0, 0, translate[0]],
-                       [0, 1, 0, translate[1]],
-                       [0, 0, 1, translate[2]],
-                       [0, 0, 0, 1]]
-
-        scale_matrix = [[scale[0], 0, 0, 0],
-                        [0, scale[1], 0, 0],
-                        [0, 0, scale[2], 0],
+    def glModelMatrix(self, translate=(0, 0, 0), rotate=(0, 0, 0), scale=(1, 1, 1)):
+        translateMat = [[1, 0, 0, translate[0]],
+                        [0, 1, 0, translate[1]],
+                        [0, 0, 1, translate[2]],
                         [0, 0, 0, 1]]
-
-        rotationX = [[1, 0, 0, 0],
-                     [0, np.cos(rotate[0]), -np.sin(rotate[0]), 0],
-                     [0, np.sin(rotate[0]), np.cos(rotate[0]), 0],
-                     [0, 0, 0, 1]]
-
-        rotationY = [[np.cos(rotate[1]), 0, np.sin(rotate[1]), 0],
-                     [0, 1, 0, 0],
-                     [-np.sin(rotate[1]), 0, np.cos(rotate[1]), 0],
-                     [0, 0, 0, 1]]
-
-        rotationZ = [[np.cos(rotate[2]), -np.sin(rotate[2]), 0, 0],
-                     [np.sin(rotate[2]), np.cos(rotate[2]), 0, 0],
-                     [0, 0, 1, 0],
-                     [0, 0, 0, 1]]
-
-        tempRot = MultiplicarMatrices(rotationX, rotationY)
-        rotation = MultiplicarMatrices(tempRot, rotationZ)
-        temp = MultiplicarMatrices(scale_matrix, rotation)
-        modelM = MultiplicarMatrices(temp, translation)
-
-        self.modelMatrix = modelM
-        return self.modelMatrix
+        scaleMat = [[scale[0], 0, 0, 0],
+                    [0, scale[1], 0, 0],
+                    [0, 0, scale[2], 0],
+                    [0, 0, 0, 1]]
+        rx = [[1, 0, 0, 0],
+              [0, math.cos(math.radians(rotate[0])), -math.sin(math.radians(rotate[0])), 0],
+              [0, math.sin(math.radians(rotate[0])), math.cos(math.radians(rotate[0])), 0],
+              [0, 0, 0, 1]]
+        ry = [[math.cos(math.radians(rotate[1])), 0, math.sin(math.radians(rotate[1])), 0],
+              [0, 1, 0, 0],
+              [-math.sin(math.radians(rotate[1])), 0, math.cos(math.radians(rotate[1])), 0],
+              [0, 0, 0, 1]]
+        rz = [[math.cos(math.radians(rotate[2])), -math.sin(math.radians(rotate[2])), 0, 0],
+              [math.sin(math.radians(rotate[2])), math.cos(math.radians(rotate[2])), 0, 0],
+              [0, 0, 1, 0],
+              [0, 0, 0, 1]]
+        rotationMat = ml.matMatMult(ml.matMatMult(rx, ry), rz)
+        return ml.matMatMult(ml.matMatMult(translateMat, rotationMat), scaleMat)
 
     def glFinish(self, filename):
         with open(filename, "wb") as file:
@@ -308,3 +380,51 @@ class Renderer(object):
             for y in range(self.height):
                 for x in range(self.width):
                     file.write(self.pixels[x][y])
+
+    def glViewport(self, x, y, width, height):
+        self.vpX = x
+        self.vpY = y
+        self.vpWidth = width
+        self.vpHeight = height
+
+        self.vpMatrix = [[self.vpWidth / 2, 0, 0, self.vpX + self.vpWidth / 2],
+                         [0, self.vpHeight / 2, 0, self.vpY + self.vpHeight / 2],
+                         [0, 0, 0.5, 0.5],
+                         [0, 0, 0, 1]]
+
+    def glCameraMatrix(self, translate=(0, 0, 0), rotate=(0, 0, 0)):
+        # Crea matrix de la camara
+        self.camMatrix = self.glModelMatrix(translate, rotate)
+
+        # La matriz de vista es igual a la inversa de la camara
+        self.viewMatrix = ml.inverse_matrix(self.camMatrix)
+
+    def glLookAt(self, camPos=(0, 0, 0), eyePos=(0, 0, 0)):
+        forward = ml.norm_vector(ml.sub_vector(camPos, eyePos))
+        right = ml.norm_vector(ml.cross_product((0, 1, 0), forward))
+        up = ml.norm_vector(ml.cross_product(forward, right))
+
+        self.camMatrix = [[right[0], up[0], forward[0], camPos[0]],
+                          [right[1], up[1], forward[1], camPos[1]],
+                          [right[2], up[2], forward[2], camPos[2]],
+                          [0, 0, 0, 1]]
+
+        self.viewMatrix = ml.inverse_matrix(self.camMatrix)
+
+    def glProjectionMatrix(self, fov=60, n=0.1, f=1000):
+        aspectRatio = self.vpWidth / self.vpHeight
+        t = math.tan(math.radians(fov) / 2) * n
+        r = t * aspectRatio
+        self.projectionMatrix = [[n / r, 0, 0, 0],
+                                 [0, n / t, 0, 0],
+                                 [0, 0, -(f + n) / (f - n), -(2 * f * n) / (f - n)],
+                                 [0, 0, -1, 0]]
+
+    def glLoadModel(self, filename, textureName, translate=(0, 0, 0), rotate=(0, 0, 0), scale=(1, 1, 1)):
+
+        model = Model(filename, translate, rotate, scale)
+        model.LoadTexture(textureName)
+
+        self.objects.append(model)
+
+
